@@ -26,6 +26,7 @@ Item {
   property string filterText: ""
   property string shortcut: ""
   property bool bindingsMissing: false
+  property bool shortcutInitialized: false
   property var binds: []
 
   readonly property var entry: {
@@ -160,6 +161,17 @@ Item {
     return Keybind.conflict(root.binds, combination)
   }
 
+  function ensureDefaultShortcut() {
+    if (root.shortcutInitialized) return
+    if (!root.shell || root.entry === null) return
+    if (root.bindingsText() === null) return
+
+    root.shortcutInitialized = true
+    if (root.entry.shortcut !== undefined) return
+
+    root.applyShortcut(Model.defaultShortcut())
+  }
+
   function bindingsText() {
     if (bindingsFile.loaded) return bindingsFile.text()
     if (root.bindingsMissing) return ""
@@ -177,6 +189,7 @@ Item {
 
     bindingsFile.setText(next)
     root.shortcut = combination
+    root.updateSetting("shortcut", combination)
     bindsProcess.running = true
   }
 
@@ -186,9 +199,11 @@ Item {
 
     bindingsFile.setText(Keybind.withoutBinding(current))
     root.shortcut = ""
+    root.updateSetting("shortcut", "")
     bindsProcess.running = true
   }
 
+  onEntryChanged: root.ensureDefaultShortcut()
   onOpenedChanged: if (root.opened) bindsProcess.running = true
   onSettingsOpenChanged: if (root.settingsOpen) bindsProcess.running = true
 
@@ -204,11 +219,13 @@ Item {
     onLoaded: {
       root.bindingsMissing = false
       root.shortcut = Keybind.readBlock(bindingsFile.text())
+      root.ensureDefaultShortcut()
     }
 
     onLoadFailed: {
       root.bindingsMissing = true
       root.shortcut = ""
+      root.ensureDefaultShortcut()
     }
   }
 

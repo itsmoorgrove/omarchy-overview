@@ -4,6 +4,8 @@ var ADDRESS_PATTERN = /^0x[0-9a-f]{1,16}$/
 var WORKSPACE_PATTERN = /^-?[0-9]{1,4}$/
 var SPECIAL_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 
+var DEFAULT_SHORTCUT = "SUPER + Tab"
+
 var DEFAULTS = {
   previews: "live",
   titles: true,
@@ -25,6 +27,10 @@ var DIMS = {
   subtle: 0.62,
   medium: 0.85,
   strong: 0.97
+}
+
+function defaultShortcut() {
+  return DEFAULT_SHORTCUT
 }
 
 function defaultFor(key) {

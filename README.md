@@ -11,7 +11,7 @@ with live window previews, drag-and-drop, and a bar icon that opens it in one cl
 - **True layout** — windows sit exactly where Hyprland has them, tiled and floating
 - **Drag to move** — pull a window onto another space to send it there
 - **One click** — the bar icon toggles the overview; right-click opens settings
-- **Set your own shortcut** — pick a key combination in the settings sheet, no config editing
+- **Bound on install** — `SUPER + Tab` out of the box, changeable by click in the settings sheet
 - **Keyboard first** — arrows to navigate, `/` to filter, enter to jump, esc to leave
 - **Every monitor** — each screen shows its own spaces, at its own aspect ratio
 
@@ -22,13 +22,16 @@ omarchy plugin add https://github.com/moorgrove/omarchy-overview.git
 omarchy plugin enable moorgrove.overview
 ```
 
-The icon appears in the left section of the bar. Move it with
+The icon appears in the left section of the bar, and `SUPER + Tab` is bound on first
+run. That combination is Omarchy's *Next workspace* by default, so enabling the plugin
+takes it over — pick a different one in settings if you want it back. Move the icon with
 `omarchy bar move moorgrove.overview --section right`.
 
 ## Use
 
 | Action | Result |
 |---|---|
+| `SUPER + Tab` | Toggle the overview |
 | Click the bar icon | Toggle the overview |
 | Right-click the bar icon | Open settings |
 | Click a space | Switch to it |
@@ -50,10 +53,11 @@ Open the gear in the top right, or press `s`. Everything is a click.
 Shortcut · window previews · window titles · wallpaper backdrop · empty spaces ·
 special spaces · card size · backdrop dim · minimum spaces
 
-Choosing a shortcut writes a single managed block into `~/.config/hypr/bindings.lua`
-and unbinds whatever held that combination before. Clearing it removes the block and
-leaves the rest of the file untouched. Everything else is stored inline on the plugin's
-entry in `~/.config/omarchy/shell.json`.
+The shortcut is a single managed block in `~/.config/hypr/bindings.lua`, written on
+first run and rewritten whenever you change it. It unbinds whatever held that
+combination before, and the settings sheet tells you what that was. Clearing it removes
+the block, leaves the rest of the file untouched, and stays cleared. Everything else is
+stored inline on the plugin's entry in `~/.config/omarchy/shell.json`.
 
 ## Requirements
 
