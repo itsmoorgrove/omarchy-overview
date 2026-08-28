@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "moorgrove.overview",
+  "name": "Overview",
+  "version": "1.0.0",
+  "author": "moorgrove",
+  "description": "Workspace overview with live window previews, drag-and-drop window moving, and a bar icon",
+  "kinds": [
+    "overlay",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Overview.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Overview",
+    "description": "Opens the workspace overview",
+    "category": "Compositor",
+    "allowMultiple": false,
+    "defaultSection": "left"
+  }
+}
