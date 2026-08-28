@@ -13,11 +13,13 @@ Item {
   required property var surface
   required property var overview
 
-  readonly property var windows: root.slot.workspace
+  readonly property bool ready: root.slot !== null && root.surface !== null && root.overview !== null
+  readonly property var windows: root.ready && root.slot.workspace
     ? Model.windowsOf(root.slot.workspace, root.surface.frame)
     : []
   readonly property bool empty: root.windows.length === 0
-  readonly property bool current: root.slot.workspace !== null && root.slot.workspace.focused === true
+  readonly property bool current: root.ready && root.slot.workspace !== null
+    && root.slot.workspace.focused === true
   readonly property bool selected: root.surface.slotIndex === root.slotIndex
   readonly property bool dropTarget: root.surface.dragging && root.surface.dropIndex === root.slotIndex
   readonly property color accent: root.surface.surfaceAccent
@@ -114,7 +116,7 @@ Item {
       Text {
         id: badge
         anchors.centerIn: parent
-        text: root.slot.label
+        text: root.ready ? root.slot.label : ""
         color: root.current ? Color.background : root.text
         font.family: root.surface.fontFamily
         font.pixelSize: Style.font.caption
@@ -129,10 +131,11 @@ Item {
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       onEntered: {
+        if (!root.ready) return
         root.surface.slotIndex = root.slotIndex
         root.surface.windowIndex = -1
       }
-      onClicked: root.overview.activateWorkspace(root.slot)
+      onClicked: if (root.ready) root.overview.activateWorkspace(root.slot)
     }
   }
 }

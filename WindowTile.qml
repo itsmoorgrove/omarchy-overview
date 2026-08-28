@@ -15,19 +15,25 @@ Item {
   required property var surface
   required property var overview
 
-  readonly property bool live: root.overview.previews === "live"
+  readonly property bool ready: root.entry !== null && root.card !== null && root.surface !== null
+    && root.overview !== null
+  readonly property bool live: root.ready && root.overview.previews === "live"
     && root.entry.toplevel !== null && root.entry.toplevel.wayland !== null
-  readonly property bool matched: Model.matches(root.entry, root.overview.filterText)
-  readonly property bool dimmed: root.overview.filterText !== "" && !root.matched
-  readonly property bool held: root.surface.dragging && root.surface.dragAddress === root.entry.address
-  readonly property bool selected: root.surface.slotIndex === root.card.slotIndex
+  readonly property bool matched: !root.ready || Model.matches(root.entry, root.overview.filterText)
+  readonly property bool dimmed: root.ready && root.overview.filterText !== "" && !root.matched
+  readonly property bool held: root.ready && root.surface.dragging
+    && root.surface.dragAddress === root.entry.address
+  readonly property bool selected: root.ready && root.surface.slotIndex === root.card.slotIndex
     && root.surface.windowIndex === root.stackIndex
-  readonly property string label: root.entry.title || root.entry.appId || "window"
+  readonly property string label: root.ready
+    ? (root.entry.title || root.entry.appId || "window")
+    : ""
 
-  readonly property var desktopEntry: root.entry.appId
+  readonly property var desktopEntry: root.ready && root.entry.appId
     ? DesktopEntries.heuristicLookup(root.entry.appId)
     : null
   readonly property string iconSource: {
+    if (!root.ready) return ""
     var name = root.desktopEntry && root.desktopEntry.icon ? root.desktopEntry.icon : root.entry.appId
     var path = name ? Quickshell.iconPath(name, true) : ""
     return path ? path : Quickshell.iconPath("application-x-executable", true)
@@ -115,6 +121,7 @@ Item {
     property bool dragStarted: false
 
     onEntered: {
+      if (!root.ready) return
       root.surface.slotIndex = root.card.slotIndex
       root.surface.windowIndex = root.stackIndex
     }
@@ -125,7 +132,7 @@ Item {
     }
 
     onPositionChanged: function(mouse) {
-      if (!pressed || !(mouse.buttons & Qt.LeftButton)) return
+      if (!root.ready || !pressed || !(mouse.buttons & Qt.LeftButton)) return
       var point = mapToItem(null, mouse.x, mouse.y)
 
       if (!dragStarted) {
@@ -147,7 +154,7 @@ Item {
     }
 
     onClicked: function(mouse) {
-      if (dragStarted) return
+      if (dragStarted || !root.ready) return
       if (mouse.button === Qt.MiddleButton) root.overview.closeWindow(root.entry.address)
       else root.overview.activateWindow(root.entry.address)
     }
@@ -182,7 +189,7 @@ Item {
       anchors.fill: parent
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
-      onClicked: root.overview.closeWindow(root.entry.address)
+      onClicked: if (root.ready) root.overview.closeWindow(root.entry.address)
     }
   }
 }
