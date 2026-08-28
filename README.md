@@ -20,7 +20,7 @@ with live window previews, drag-and-drop, and a bar icon that opens it in one cl
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/moorgrove/omarchy-overview.git
+omarchy plugin add https://github.com/itsmoorgrove/omarchy-overview.git
 omarchy plugin enable moorgrove.overview
 ```
 
