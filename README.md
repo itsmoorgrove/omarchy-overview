@@ -40,8 +40,8 @@ takes it over — pick a different one in settings if you want it back. Move the
 | Click a window | Focus it |
 | Middle-click a window | Close it |
 | Drag a window onto a space | Move it there, silently |
-| `←` `→` / `h` `l` | Move between spaces |
-| `↑` `↓` / `k` `j` | Move between windows |
+| `←` `→` `↑` `↓` / `h` `j` `k` `l` | Move around the grid of spaces |
+| `tab` / `shift+tab` | Move between windows in the selected space |
 | `1`–`0` | Jump to a space |
 | `enter` | Open the selection |
 | `/` | Filter windows by title or app |

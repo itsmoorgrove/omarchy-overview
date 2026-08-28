@@ -79,6 +79,27 @@ PanelWindow {
     return slot && slot.workspace ? Model.windowsOf(slot.workspace, root.frame) : []
   }
 
+  function moveRow(delta) {
+    if (root.slots.length === 0) return
+
+    var columns = Math.max(1, field.grid.columns)
+    var next = root.slotIndex + delta * columns
+
+    if (next < 0) {
+      if (root.slotIndex < columns) return
+      next = 0
+    }
+
+    if (next >= root.slots.length) {
+      var lastRowStart = Math.floor((root.slots.length - 1) / columns) * columns
+      if (root.slotIndex >= lastRowStart) return
+      next = root.slots.length - 1
+    }
+
+    root.slotIndex = next
+    root.windowIndex = -1
+  }
+
   function moveWindowSelection(delta) {
     var windows = root.slotWindows(root.slotIndex)
     if (windows.length === 0) return
@@ -311,16 +332,16 @@ PanelWindow {
         return
       case Qt.Key_Up:
       case Qt.Key_K:
-        root.moveWindowSelection(-1)
+        root.moveRow(-1)
         event.accepted = true
         return
       case Qt.Key_Down:
       case Qt.Key_J:
-        root.moveWindowSelection(1)
+        root.moveRow(1)
         event.accepted = true
         return
       case Qt.Key_Tab:
-        root.moveSlot(event.modifiers & Qt.ShiftModifier ? -1 : 1)
+        root.moveWindowSelection(event.modifiers & Qt.ShiftModifier ? -1 : 1)
         event.accepted = true
         return
       case Qt.Key_Slash:
