@@ -228,6 +228,35 @@ PanelWindow {
     onClicked: root.overview.dismiss()
   }
 
+  Rectangle {
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: parent.top
+    height: root.insets.top + root.chromeMargin * 3
+    visible: root.insets.top > 0
+
+    gradient: Gradient {
+      GradientStop { position: 0.0; color: Color.background }
+      GradientStop { position: 0.55; color: Color.background }
+      GradientStop { position: 1.0; color: Util.alpha(Color.background, 0) }
+    }
+  }
+
+  Rectangle {
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    height: root.insets.bottom + root.chromeMargin * 3
+    visible: root.insets.bottom > 0
+
+    gradient: Gradient {
+      GradientStop { position: 0.0; color: Util.alpha(Color.background, 0) }
+      GradientStop { position: 0.45; color: Color.background }
+      GradientStop { position: 1.0; color: Color.background }
+    }
+  }
+
+
   Item {
     id: keys
     anchors.fill: parent
@@ -319,8 +348,8 @@ PanelWindow {
   Item {
     id: stage
     anchors.fill: parent
-    anchors.topMargin: root.chromeMargin + root.insets.top
-    anchors.bottomMargin: root.chromeMargin + root.insets.bottom
+    anchors.topMargin: root.chromeMargin
+    anchors.bottomMargin: root.chromeMargin
     anchors.leftMargin: root.chromeMargin + root.insets.left
     anchors.rightMargin: root.chromeMargin + root.insets.right
     opacity: root.overview.opened ? 1 : 0
