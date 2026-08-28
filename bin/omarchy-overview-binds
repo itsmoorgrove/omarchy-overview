@@ -1,0 +1,106 @@
+#!/usr/bin/python3
+
+# Print the current Hyprland keybindings as bounded, projected JSON.
+# Usage: omarchy-overview-binds
+# Internal: invoked by Overview.qml via Process to detect shortcut conflicts,
+# not meant to be run by hand.
+#
+# `hyprctl -j binds` output is not bounded by anything the plugin controls: a
+# large submap-heavy config produces a large array, and a wedged compositor
+# produces no terminator at all. Both would otherwise accumulate in a
+# long-lived StdioCollector inside the persistent shell. So the subprocess gets
+# a wall-clock timeout, its stdout is capped, and only the handful of fields
+# the conflict check actually uses are re-emitted, each individually bounded.
+#
+# Output is one JSON object on stdout with exit status 0 in every case:
+#   {"status":"ok","binds":[...]}       zero or more projected bindings
+#   {"status":"blocked","reason":"..."} nothing usable was produced
+
+import json
+import subprocess
+import sys
+
+TIMEOUT_SECONDS = 3
+MAX_OUTPUT_BYTES = 1024 * 1024
+MAX_BINDS = 2000
+MAX_KEY = 64
+MAX_DESCRIPTION = 128
+MAX_SUBMAP = 64
+
+
+def emit(payload):
+    sys.stdout.write(json.dumps(payload, ensure_ascii=True) + "\n")
+
+
+def text_field(value, limit):
+    if value is None:
+        return ""
+    return str(value)[:limit]
+
+
+def int_field(value):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    # Modmasks and keycodes are small; anything else is not a real binding.
+    return number if 0 <= number <= 0xFFFF else 0
+
+
+def project(entry):
+    if not isinstance(entry, dict):
+        return None
+    return {
+        "modmask": int_field(entry.get("modmask")),
+        "key": text_field(entry.get("key"), MAX_KEY),
+        "keycode": int_field(entry.get("keycode")),
+        "description": text_field(entry.get("description"), MAX_DESCRIPTION),
+        "submap": text_field(entry.get("submap"), MAX_SUBMAP),
+    }
+
+
+def main():
+    try:
+        completed = subprocess.run(
+            ["hyprctl", "-j", "binds"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        emit({"status": "blocked", "reason": "hyprctl did not answer in time."})
+        return
+    except OSError:
+        emit({"status": "blocked", "reason": "hyprctl is not available."})
+        return
+
+    if completed.returncode != 0:
+        emit({"status": "blocked", "reason": "hyprctl reported an error."})
+        return
+
+    raw = completed.stdout
+    if len(raw) > MAX_OUTPUT_BYTES:
+        emit({"status": "blocked", "reason": "hyprctl produced more output than expected."})
+        return
+
+    try:
+        parsed = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        emit({"status": "blocked", "reason": "hyprctl did not produce valid JSON."})
+        return
+
+    if not isinstance(parsed, list):
+        emit({"status": "blocked", "reason": "hyprctl did not produce a binding list."})
+        return
+
+    binds = []
+    for entry in parsed[:MAX_BINDS]:
+        projected = project(entry)
+        if projected is not None:
+            binds.append(projected)
+
+    emit({"status": "ok", "binds": binds})
+
+
+if __name__ == "__main__":
+    main()

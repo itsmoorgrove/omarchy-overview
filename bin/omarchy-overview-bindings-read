@@ -1,0 +1,56 @@
+#!/usr/bin/python3
+
+# Read ~/.config/hypr/bindings.lua and print one bounded JSON object.
+# Usage: omarchy-overview-bindings-read
+# Internal: invoked by Overview.qml via Process, not meant to be run by hand.
+#
+# This is the only place the plugin turns the bindings pathname into bytes for
+# reading. See _bindings.py for the descriptor discipline.
+#
+# Output is always one JSON object on stdout and the exit status is always 0
+# for an answer the plugin can act on, so the QML side never has to interpret
+# a partial stream:
+#   {"status":"ok","text":"..."}       the file was read and is within bounds
+#   {"status":"missing"}               no bindings file exists yet
+#   {"status":"blocked","reason":"..."} a hazard was found; nothing was read
+
+import json
+import os
+import sys
+
+# Saving anything under ~/.config/omarchy/plugins/ makes the shell reload plugin
+# code, so this must not drop a __pycache__ next to itself on first run.
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import _bindings as lib
+
+
+def emit(payload):
+    sys.stdout.write(json.dumps(payload, ensure_ascii=True) + "\n")
+
+
+def main():
+    try:
+        dir_fd = lib.open_dir()
+    except lib.Refused as refusal:
+        emit({"status": "blocked", "reason": str(refusal)})
+        return
+
+    try:
+        text, _mode = lib.read_bindings(dir_fd)
+    except lib.Refused as refusal:
+        emit({"status": "blocked", "reason": str(refusal)})
+        return
+    finally:
+        os.close(dir_fd)
+
+    if text is None:
+        emit({"status": "missing"})
+        return
+
+    emit({"status": "ok", "text": text})
+
+
+if __name__ == "__main__":
+    main()

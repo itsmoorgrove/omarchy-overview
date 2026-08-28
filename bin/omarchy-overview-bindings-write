@@ -1,0 +1,118 @@
+#!/usr/bin/python3
+
+# Replace ~/.config/hypr/bindings.lua with the bounded content on stdin.
+# Usage: omarchy-overview-bindings-write < new-content
+# Internal: invoked by Overview.qml via Process after an explicit user action
+# in the settings sheet, not meant to be run by hand.
+#
+# The new content arrives on stdin rather than in argv so it never appears in
+# /proc/<pid>/cmdline, and there is no shell anywhere in the path -- Overview.qml
+# passes an argv array, so nothing here is word-split or expanded.
+#
+# The bindings pathname is never opened for writing. The replacement is built
+# in a fresh O_EXCL sibling created relative to a held directory descriptor and
+# then renamed over the target relative to that same descriptor. rename(2)
+# replaces whatever directory entry currently sits at the name -- symlink or
+# not -- rather than following it, so this can only ever write to
+# ~/.config/hypr/bindings.lua itself, whatever that name happens to resolve to.
+#
+# Output is one JSON object on stdout with exit status 0 for any answer the
+# plugin can act on:
+#   {"status":"ok"}                     the replacement is on disk
+#   {"status":"blocked","reason":"..."} a hazard was found; nothing was written
+
+import errno
+import json
+import os
+import sys
+
+# Saving anything under ~/.config/omarchy/plugins/ makes the shell reload plugin
+# code, so this must not drop a __pycache__ next to itself on first run.
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import _bindings as lib
+
+TEMP_PREFIX = ".bindings.lua.overview-"
+DEFAULT_MODE = 0o644
+
+
+def emit(payload):
+    sys.stdout.write(json.dumps(payload, ensure_ascii=True) + "\n")
+
+
+def read_stdin():
+    data = sys.stdin.buffer.read(lib.MAX_BYTES + 1)
+    if len(data) > lib.MAX_BYTES:
+        raise lib.Refused("The replacement exceeds the maximum allowed size.")
+    return data
+
+
+def create_temp(dir_fd):
+    """Create an unpredictable exclusive sibling and return (name, fd)."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+    for _attempt in range(16):
+        name = TEMP_PREFIX + os.urandom(8).hex()
+        try:
+            return name, os.open(name, flags, 0o600, dir_fd=dir_fd)
+        except OSError as error:
+            if error.errno == errno.EEXIST:
+                continue
+            raise lib.Refused("Could not create a temporary file next to the bindings file.")
+    raise lib.Refused("Could not create a temporary file next to the bindings file.")
+
+
+def replace(dir_fd, data, mode):
+    name, fd = create_temp(dir_fd)
+    try:
+        with os.fdopen(fd, "wb", closefd=True) as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+            os.fchmod(handle.fileno(), mode)
+
+        # From here the only remaining operation on the target name is the
+        # rename itself, which cannot be redirected through a symlink.
+        os.rename(name, lib.BINDINGS_NAME, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+        os.fsync(dir_fd)
+    except Exception:
+        try:
+            os.unlink(name, dir_fd=dir_fd)
+        except OSError:
+            pass
+        raise
+
+
+def main():
+    try:
+        data = read_stdin()
+    except lib.Refused as refusal:
+        emit({"status": "blocked", "reason": str(refusal)})
+        return
+
+    try:
+        dir_fd = lib.open_dir()
+    except lib.Refused as refusal:
+        emit({"status": "blocked", "reason": str(refusal)})
+        return
+
+    try:
+        # Validate whatever currently sits at the target before replacing it, so
+        # the plugin refuses to overwrite something it would not have read, and
+        # so the existing permissions carry over to the replacement.
+        _text, mode = lib.read_bindings(dir_fd)
+        replace(dir_fd, data, DEFAULT_MODE if mode is None else mode)
+    except lib.Refused as refusal:
+        emit({"status": "blocked", "reason": str(refusal)})
+        return
+    except OSError:
+        emit({"status": "blocked", "reason": "Could not replace the bindings file."})
+        return
+    finally:
+        os.close(dir_fd)
+
+    emit({"status": "ok"})
+
+
+if __name__ == "__main__":
+    main()

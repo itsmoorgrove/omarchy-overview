@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "moorgrove.overview",
   "name": "Overview",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "moorgrove",
   "description": "Workspace overview with live window previews, drag-and-drop window moving, and a bar icon",
   "kinds": [

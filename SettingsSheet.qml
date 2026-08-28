@@ -84,6 +84,7 @@ Item {
 
   function commit() {
     if (!root.draft) return
+    if (!root.overview.canBindShortcut) return
     root.overview.applyShortcut(root.draft)
     root.draft = ""
   }
@@ -213,7 +214,7 @@ Item {
 
             IconButton {
               anchors.verticalCenter: parent.verticalCenter
-              visible: root.draft !== ""
+              visible: root.draft !== "" && root.overview.canBindShortcut
               label: "Apply"
               fontFamily: root.surface.fontFamily
               foreground: root.surface.surfaceText
@@ -235,6 +236,7 @@ Item {
             IconButton {
               anchors.verticalCenter: parent.verticalCenter
               visible: root.draft === "" && root.overview.shortcut !== ""
+                && root.overview.canBindShortcut
               label: "Clear"
               fontFamily: root.surface.fontFamily
               foreground: root.surface.surfaceText
@@ -246,13 +248,21 @@ Item {
 
         Text {
           width: parent.width
-          text: root.capturing
-            ? "Hold a modifier and press a key. Esc cancels."
-            : (root.conflict
-              ? "Replaces “" + root.conflict + "”. Applying overrides it."
-              : "Writes a managed block into ~/.config/hypr/bindings.lua.")
-          color: root.conflict ? Color.urgent : root.surface.surfaceText
-          opacity: root.conflict ? 0.9 : 0.5
+          text: {
+            if (root.capturing) return "Hold a modifier and press a key. Esc cancels."
+            if (root.overview.bindingsProblem) return root.overview.bindingsProblem
+            if (root.conflict)
+              return "Replaces “" + root.conflict + "”. Applying overrides it."
+            if (root.draft)
+              return "Apply writes a managed block into ~/.config/hypr/bindings.lua."
+            if (!root.overview.shortcut)
+              return "No shortcut is set. Pick one above — nothing is written until you apply it."
+            return "Managed by this plugin in ~/.config/hypr/bindings.lua."
+          }
+          color: root.conflict || root.overview.bindingsProblem
+            ? Color.urgent
+            : root.surface.surfaceText
+          opacity: root.conflict || root.overview.bindingsProblem ? 0.9 : 0.5
           font.family: root.surface.fontFamily
           font.pixelSize: Style.font.caption
           wrapMode: Text.WordWrap

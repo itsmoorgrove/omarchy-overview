@@ -17,17 +17,35 @@ Item {
   readonly property string pluginId: root.manifest && root.manifest.id
     ? String(root.manifest.id)
     : "moorgrove.overview"
-  readonly property string bindingsPath: Quickshell.env("HOME") + "/.config/hypr/bindings.lua"
   readonly property string toggleCommand: "omarchy-shell shell toggle " + root.pluginId
+
+  // Helper scripts live next to this file. __sourceDir is the plugin's own
+  // source directory as resolved by the shell's PluginRegistry; the literal
+  // fallback covers a manifest handed over without it.
+  readonly property string helperDir: (root.manifest && root.manifest.__sourceDir
+    ? String(root.manifest.__sourceDir).replace(/\/$/, "")
+    : Quickshell.env("HOME") + "/.config/omarchy/plugins/" + root.pluginId) + "/bin"
 
   property bool opened: false
   property bool settingsOpen: false
   property bool filtering: false
   property string filterText: ""
   property string shortcut: ""
-  property bool bindingsMissing: false
-  property bool shortcutInitialized: false
   property var binds: []
+
+  // Last snapshot returned by the read helper, and why it is unusable if so.
+  property string bindingsText: ""
+  property bool bindingsReadable: false
+  property bool bindingsPresent: false
+  property string bindingsProblem: ""
+
+  readonly property bool canBindShortcut: root.bindingsReadable && root.bindingsPresent
+
+  // Set only by an explicit Apply/Clear in the settings sheet. The write is
+  // issued from the completion of the read it is paired with, so the block is
+  // always rebuilt from a fresh snapshot rather than a stale one.
+  property string pendingAction: ""
+  property string pendingShortcut: ""
 
   readonly property var entry: {
     var config = root.shell ? root.shell.shellConfig : null
@@ -161,85 +179,156 @@ Item {
     return Keybind.conflict(root.binds, combination)
   }
 
-  function ensureDefaultShortcut() {
-    if (root.shortcutInitialized) return
-    if (!root.shell || root.entry === null) return
-    if (root.bindingsText() === null) return
-
-    root.shortcutInitialized = true
-    if (root.entry.shortcut !== undefined) return
-
-    root.applyShortcut(Model.defaultShortcut())
-  }
-
-  function bindingsText() {
-    if (bindingsFile.loaded) return bindingsFile.text()
-    if (root.bindingsMissing) return ""
-    return null
+  // The plugin ships unbound. Nothing here writes to the user's Hyprland
+  // configuration until Apply or Clear is pressed in the settings sheet; the
+  // overview is reachable from its bar icon and over IPC in the meantime.
+  function refreshBindings() {
+    if (readProcess.running) return
+    readProcess.running = true
   }
 
   function applyShortcut(combination) {
     if (!Keybind.isValid(combination)) return
+    if (writeProcess.running) return
 
-    var current = root.bindingsText()
-    if (current === null) return
-
-    var next = Keybind.withBinding(current, combination, "Workspace overview", root.toggleCommand)
-    if (next === null) return
-
-    bindingsFile.setText(next)
-    root.shortcut = combination
-    root.updateSetting("shortcut", combination)
-    bindsProcess.running = true
+    root.pendingAction = "apply"
+    root.pendingShortcut = combination
+    root.refreshBindings()
   }
 
   function clearShortcut() {
-    var current = root.bindingsText()
-    if (current === null) return
+    if (writeProcess.running) return
 
-    bindingsFile.setText(Keybind.withoutBinding(current))
-    root.shortcut = ""
-    root.updateSetting("shortcut", "")
-    bindsProcess.running = true
+    root.pendingAction = "clear"
+    root.pendingShortcut = ""
+    root.refreshBindings()
   }
 
-  onEntryChanged: root.ensureDefaultShortcut()
-  onOpenedChanged: if (root.opened) bindsProcess.running = true
-  onSettingsOpenChanged: if (root.settingsOpen) bindsProcess.running = true
+  function runPendingWrite() {
+    var action = root.pendingAction
+    root.pendingAction = ""
 
-  FileView {
-    id: bindingsFile
-    path: root.bindingsPath
-    preload: true
-    atomicWrites: true
-    watchChanges: true
-    printErrors: false
-    onFileChanged: bindingsFile.reload()
-
-    onLoaded: {
-      root.bindingsMissing = false
-      root.shortcut = Keybind.readBlock(bindingsFile.text())
-      root.ensureDefaultShortcut()
+    if (!action) return
+    if (!root.canBindShortcut) {
+      root.pendingShortcut = ""
+      return
     }
 
-    onLoadFailed: {
-      root.bindingsMissing = true
-      root.shortcut = ""
-      root.ensureDefaultShortcut()
+    var next = action === "clear"
+      ? Keybind.withoutBinding(root.bindingsText)
+      : Keybind.withBinding(root.bindingsText, root.pendingShortcut,
+        "Workspace overview", root.toggleCommand)
+
+    if (next === null) {
+      root.pendingShortcut = ""
+      return
+    }
+
+    writeProcess.pendingResult = action === "clear" ? "" : root.pendingShortcut
+    root.pendingShortcut = ""
+
+    // Re-enabled per write: the helper reads until EOF, so stdin has to be
+    // closed after the content goes out or the process never finishes.
+    writeProcess.stdinEnabled = true
+    writeProcess.running = true
+    writeProcess.write(next)
+    writeProcess.stdinEnabled = false
+  }
+
+  onOpenedChanged: if (root.opened) { root.refreshBindings(); bindsProcess.running = true }
+  onSettingsOpenChanged: if (root.settingsOpen) { root.refreshBindings(); bindsProcess.running = true }
+
+  // Reading and writing the bindings file both go through descriptor-safe
+  // helpers rather than a FileView. FileView resolves the pathname itself and
+  // hands back the whole file, so a size or file-type check in QML would only
+  // run after the persistent shell had already opened and allocated it.
+  Process {
+    id: readProcess
+    command: [root.helperDir + "/omarchy-overview-bindings-read"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var result = null
+        try {
+          result = JSON.parse(text)
+        } catch (error) {
+          result = null
+        }
+
+        if (result && result.status === "ok") {
+          root.bindingsText = String(result.text)
+          root.bindingsReadable = true
+          root.bindingsPresent = true
+          root.bindingsProblem = ""
+        } else if (result && result.status === "missing") {
+          // Omarchy always ships this file. Its absence means a layout this
+          // plugin does not understand, so it declines to invent one rather
+          // than dropping a lone binding block into an unknown setup.
+          root.bindingsText = ""
+          root.bindingsReadable = true
+          root.bindingsPresent = false
+          root.bindingsProblem = "No ~/.config/hypr/bindings.lua to add a shortcut to."
+        } else {
+          root.bindingsText = ""
+          root.bindingsReadable = false
+          root.bindingsPresent = false
+          root.bindingsProblem = result && result.reason
+            ? String(result.reason)
+            : "The bindings file could not be read safely."
+        }
+
+        root.shortcut = root.bindingsPresent ? Keybind.readBlock(root.bindingsText) : ""
+        root.runPendingWrite()
+      }
+    }
+  }
+
+  Process {
+    id: writeProcess
+
+    // The shortcut this write is establishing, adopted only once it lands.
+    property string pendingResult: ""
+
+    command: [root.helperDir + "/omarchy-overview-bindings-write"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var result = null
+        try {
+          result = JSON.parse(text)
+        } catch (error) {
+          result = null
+        }
+
+        if (result && result.status === "ok") {
+          root.shortcut = writeProcess.pendingResult
+          root.updateSetting("shortcut", writeProcess.pendingResult)
+          root.bindingsProblem = ""
+        } else {
+          root.bindingsProblem = result && result.reason
+            ? String(result.reason)
+            : "The shortcut could not be written."
+        }
+
+        writeProcess.pendingResult = ""
+        bindsProcess.running = true
+      }
     }
   }
 
   Process {
     id: bindsProcess
-    command: ["hyprctl", "-j", "binds"]
+    command: [root.helperDir + "/omarchy-overview-binds"]
     stdout: StdioCollector {
       onStreamFinished: {
+        var result = null
         try {
-          var parsed = JSON.parse(text)
-          root.binds = Array.isArray(parsed) ? parsed : []
+          result = JSON.parse(text)
         } catch (error) {
-          root.binds = []
+          result = null
         }
+
+        root.binds = result && result.status === "ok" && Array.isArray(result.binds)
+          ? result.binds
+          : []
       }
     }
   }
