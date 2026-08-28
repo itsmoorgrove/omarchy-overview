@@ -11,13 +11,14 @@ Item {
 
   implicitHeight: Math.max(title.implicitHeight, gear.implicitHeight)
 
-  Column {
+  Row {
     id: title
     anchors.left: parent.left
     anchors.verticalCenter: parent.verticalCenter
-    spacing: 2
+    spacing: Style.spacing.sm
 
     Text {
+      id: titleLabel
       text: "Workspaces"
       color: root.surface.surfaceText
       font.family: root.surface.fontFamily
@@ -25,12 +26,13 @@ Item {
     }
 
     Text {
-      text: root.surface.monitorName + " · " + root.surface.slots.length + " spaces"
-      textFormat: Text.PlainText
+      anchors.baseline: titleLabel.baseline
+      text: "· " + root.surface.monitorName + " · " + root.surface.slots.length + " spaces"
       color: root.surface.surfaceText
-      opacity: 0.55
+      opacity: 0.5
       font.family: root.surface.fontFamily
       font.pixelSize: Style.font.caption
+      textFormat: Text.PlainText
     }
   }
 
