@@ -39,6 +39,7 @@ PanelWindow {
   property int dropIndex: -1
 
   readonly property var insets: Model.reservedInsets(root.hyprMonitor)
+  readonly property real chromeMargin: Style.spacing.lg
 
   readonly property string wallpaperUrl: "file://" + Quickshell.env("HOME")
     + "/.local/state/omarchy/current/background"
@@ -318,10 +319,10 @@ PanelWindow {
   Item {
     id: stage
     anchors.fill: parent
-    anchors.topMargin: Style.spacing.panelPadding + root.insets.top
-    anchors.bottomMargin: Style.spacing.panelPadding + root.insets.bottom
-    anchors.leftMargin: Style.spacing.panelPadding + root.insets.left
-    anchors.rightMargin: Style.spacing.panelPadding + root.insets.right
+    anchors.topMargin: root.chromeMargin + root.insets.top
+    anchors.bottomMargin: root.chromeMargin + root.insets.bottom
+    anchors.leftMargin: root.chromeMargin + root.insets.left
+    anchors.rightMargin: root.chromeMargin + root.insets.right
     opacity: root.overview.opened ? 1 : 0
     scale: root.overview.opened ? 1 : 0.97
 
@@ -349,7 +350,9 @@ PanelWindow {
       anchors.bottom: footer.top
       anchors.bottomMargin: Style.spacing.panelGap
       anchors.left: parent.left
+      anchors.leftMargin: Style.spacing.panelPadding - root.chromeMargin
       anchors.right: parent.right
+      anchors.rightMargin: Style.spacing.panelPadding - root.chromeMargin
 
       readonly property real gap: Style.spacing.xxl
       readonly property var grid: Model.bestGrid(root.slots.length, root.aspect, field.width, field.height,
