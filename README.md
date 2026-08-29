@@ -73,7 +73,7 @@ helpers in `bin/`:
 |---|---|
 | `omarchy-overview-bindings-read` | One `open()` with `O_NOFOLLOW\|O_NONBLOCK`, then `fstat`/`read` on that same descriptor — regular file, owned by you, under a 512 KiB cap |
 | `omarchy-overview-bindings-write` | Builds the replacement in a fresh `O_EXCL` sibling and `rename()`s it into place relative to a held directory descriptor; the target is never opened for writing |
-| `omarchy-overview-binds` | Runs `hyprctl -j binds` under a timeout, caps its output, and re-emits only the five fields the conflict check uses |
+| `omarchy-overview-binds` | Runs `hyprctl -j binds` under a timeout, reads its stdout incrementally against a hard 1 MiB ceiling — signalling the child the moment it crosses either bound — and re-emits only the five fields the conflict check uses |
 
 A symlink, FIFO, device node, or oversized file at the bindings path is refused with a
 message in the settings sheet rather than followed, blocked on, or read into the

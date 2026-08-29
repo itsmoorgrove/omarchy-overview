@@ -8,20 +8,27 @@
 # `hyprctl -j binds` output is not bounded by anything the plugin controls: a
 # large submap-heavy config produces a large array, and a wedged compositor
 # produces no terminator at all. Both would otherwise accumulate in a
-# long-lived StdioCollector inside the persistent shell. So the subprocess gets
-# a wall-clock timeout, its stdout is capped, and only the handful of fields
-# the conflict check actually uses are re-emitted, each individually bounded.
+# long-lived StdioCollector inside the persistent shell. So stdout is read
+# incrementally against a wall-clock deadline and a hard byte ceiling -- the
+# child is signalled the moment it crosses either, so an oversized answer is
+# never fully materialised -- and only the handful of fields the conflict check
+# actually uses are re-emitted, each individually bounded.
 #
 # Output is one JSON object on stdout with exit status 0 in every case:
 #   {"status":"ok","binds":[...]}       zero or more projected bindings
 #   {"status":"blocked","reason":"..."} nothing usable was produced
 
 import json
+import os
+import select
 import subprocess
 import sys
+import time
 
 TIMEOUT_SECONDS = 3
+GRACE_SECONDS = 0.5
 MAX_OUTPUT_BYTES = 1024 * 1024
+READ_CHUNK_BYTES = 64 * 1024
 MAX_BINDS = 2000
 MAX_KEY = 64
 MAX_DESCRIPTION = 128
@@ -59,32 +66,80 @@ def project(entry):
     }
 
 
-def main():
+def read_bounded(stdout, deadline):
+    # Collect at most MAX_OUTPUT_BYTES before the deadline, discarding what has
+    # been read as soon as either bound is crossed. Returns
+    # ("ok", data) | ("overflow", b"") | ("timeout", b"").
+    chunks = []
+    total = 0
+    poller = select.poll()
+    poller.register(stdout.fileno(), select.POLLIN)
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not poller.poll(remaining * 1000):
+            return "timeout", b""
+        chunk = os.read(stdout.fileno(), READ_CHUNK_BYTES)
+        if not chunk:
+            return "ok", b"".join(chunks)
+        total += len(chunk)
+        if total > MAX_OUTPUT_BYTES:
+            return "overflow", b""
+        chunks.append(chunk)
+
+
+def reap(process, timeout):
+    # Wait out the child, escalating to SIGTERM then SIGKILL if it lingers.
+    # Returns its exit status, or None if it outlived even the kill.
+    for signal_child in (None, process.terminate, process.kill):
+        if signal_child is not None:
+            signal_child()
+            timeout = GRACE_SECONDS
+        try:
+            return process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            continue
+    return None
+
+
+def collect():
+    # Returns ("ok", data) or ("blocked", reason).
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             ["hyprctl", "-j", "binds"],
             stdin=subprocess.DEVNULL,
-            capture_output=True,
-            timeout=TIMEOUT_SECONDS,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
-    except subprocess.TimeoutExpired:
-        emit({"status": "blocked", "reason": "hyprctl did not answer in time."})
-        return
     except OSError:
-        emit({"status": "blocked", "reason": "hyprctl is not available."})
-        return
+        return "blocked", "hyprctl is not available."
 
-    if completed.returncode != 0:
-        emit({"status": "blocked", "reason": "hyprctl reported an error."})
-        return
+    deadline = time.monotonic() + TIMEOUT_SECONDS
+    try:
+        outcome, raw = read_bounded(process.stdout, deadline)
+        # A clean EOF means the child is on its way out, so give it the rest of
+        # the deadline; anything else is a boundary breach and is signalled now.
+        grace = max(0.0, deadline - time.monotonic()) if outcome == "ok" else 0.0
+        status = reap(process, grace)
+    finally:
+        process.stdout.close()
 
-    raw = completed.stdout
-    if len(raw) > MAX_OUTPUT_BYTES:
-        emit({"status": "blocked", "reason": "hyprctl produced more output than expected."})
+    if outcome == "timeout":
+        return "blocked", "hyprctl did not answer in time."
+    if outcome == "overflow":
+        return "blocked", "hyprctl produced more output than expected."
+    if status != 0:
+        return "blocked", "hyprctl reported an error."
+    return "ok", raw
+
+
+def main():
+    outcome, payload = collect()
+    if outcome == "blocked":
+        emit({"status": "blocked", "reason": payload})
         return
 
     try:
-        parsed = json.loads(raw.decode("utf-8"))
+        parsed = json.loads(payload.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
         emit({"status": "blocked", "reason": "hyprctl did not produce valid JSON."})
         return
