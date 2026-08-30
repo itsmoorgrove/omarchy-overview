@@ -13,14 +13,15 @@ Rectangle {
   property color accent: Color.menu.selectedText
   property bool active: false
   property real glyphSize: Style.font.iconLarge
+  property bool flat: false
 
   signal activated()
 
   implicitWidth: content.implicitWidth + Style.spacing.rowPaddingX * 2
   implicitHeight: Style.spacing.controlHeight
   radius: Style.cornerRadius
-  color: hover.hovered || root.active ? Util.alpha(root.foreground, 0.12) : "transparent"
-  border.width: 1
+  color: !root.flat && (hover.hovered || root.active) ? Util.alpha(root.foreground, 0.12) : "transparent"
+  border.width: root.flat ? 0 : 1
   border.color: root.active ? Util.alpha(root.accent, 0.7) : Util.alpha(root.foreground, 0.18)
 
   Behavior on color {

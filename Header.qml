@@ -15,6 +15,7 @@ Item {
     id: title
     anchors.left: parent.left
     anchors.verticalCenter: parent.verticalCenter
+    anchors.verticalCenterOffset: -Style.spacing.sm
     spacing: Style.spacing.sm
 
     Text {
@@ -76,8 +77,8 @@ Item {
     id: gear
     anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
+    flat: true
     glyph: "󰒓"
-    label: "Settings"
     fontFamily: root.surface.fontFamily
     foreground: root.surface.surfaceText
     accent: root.surface.surfaceAccent
