@@ -398,7 +398,7 @@ PanelWindow {
       anchors.top: header.bottom
       anchors.topMargin: Style.spacing.panelGap
       anchors.bottom: footer.top
-      anchors.bottomMargin: Style.spacing.panelGap
+      anchors.bottomMargin: Style.spacing.panelGap * 2
       anchors.left: parent.left
       anchors.leftMargin: Style.spacing.panelPadding - root.chromeMargin
       anchors.right: parent.right
