@@ -436,7 +436,9 @@ PanelWindow {
     Footer {
       id: footer
       anchors.bottom: parent.bottom
+      anchors.bottomMargin: Style.spacing.panelGap
       anchors.left: parent.left
+      anchors.rightMargin: Style.spacing.panelPadding - root.chromeMargin
       anchors.right: parent.right
       surface: root
       overview: root.overview
