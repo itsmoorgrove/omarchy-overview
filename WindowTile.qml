@@ -19,6 +19,7 @@ Item {
     && root.overview !== null
   readonly property bool live: root.ready && root.overview.previews === "live"
     && root.entry.toplevel !== null && root.entry.toplevel.wayland !== null
+    && !root.surface.dragging
   readonly property bool matched: !root.ready || Model.matches(root.entry, root.overview.filterText)
   readonly property bool dimmed: root.ready && root.overview.filterText !== "" && !root.matched
   readonly property bool held: root.ready && root.surface.dragging

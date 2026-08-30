@@ -48,7 +48,7 @@ Item {
       source: root.overview.showWallpaper ? root.surface.wallpaperUrl : ""
       fillMode: Image.PreserveAspectCrop
       asynchronous: true
-      cache: false
+      cache: true
       opacity: 0.4
       sourceSize.width: Math.max(1, Math.round(canvas.width))
     }
