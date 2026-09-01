@@ -100,16 +100,6 @@ PanelWindow {
     root.windowIndex = -1
   }
 
-  function moveWindowSelection(delta) {
-    var windows = root.slotWindows(root.slotIndex)
-    if (windows.length === 0) return
-
-    var next = root.windowIndex + delta
-    if (next < -1) next = windows.length - 1
-    if (next >= windows.length) next = -1
-    root.windowIndex = next
-  }
-
   function jumpToWorkspace(id) {
     for (var i = 0; i < root.slots.length; i++) {
       if (!root.slots[i].special && root.slots[i].id === id) {
@@ -341,7 +331,7 @@ PanelWindow {
         event.accepted = true
         return
       case Qt.Key_Tab:
-        root.moveWindowSelection(event.modifiers & Qt.ShiftModifier ? -1 : 1)
+        root.moveSlot(event.modifiers & Qt.ShiftModifier ? -1 : 1)
         event.accepted = true
         return
       case Qt.Key_Slash:

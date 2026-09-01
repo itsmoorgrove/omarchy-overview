@@ -41,7 +41,7 @@ icon with `omarchy bar move moorgrove.overview --section right`.
 | Middle-click a window | Close it |
 | Drag a window onto a space | Move it there, silently |
 | `←` `→` `↑` `↓` / `h` `j` `k` `l` | Move around the grid of spaces |
-| `tab` / `shift+tab` | Move between windows in the selected space |
+| `tab` / `shift+tab` | Step through all spaces, in order |
 | `1`–`0` | Jump to a space |
 | `enter` | Open the selection |
 | `/` | Filter windows by title or app |

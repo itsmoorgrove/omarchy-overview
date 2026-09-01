@@ -19,7 +19,7 @@ Item {
     id: hints
     anchors.centerIn: parent
     width: Math.min(implicitWidth, parent.width - shortcut.implicitWidth * 2 - Style.spacing.xxl)
-    text: "↔ ↕ move  ·  tab window  ·  enter open  ·  drag to move window  ·  / filter  ·  s settings  ·  esc close"
+    text: "↔ ↕ tab move  ·  enter open  ·  drag to move window  ·  / filter  ·  s settings  ·  esc close"
     color: root.surface.surfaceText
     opacity: 0.45
     font.family: root.surface.fontFamily
