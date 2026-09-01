@@ -204,10 +204,19 @@ function slotsFor(workspaces, screenName, isPrimary, options) {
   return specials.concat(mine)
 }
 
+// Reference aspect the density presets ("Compact"/"Regular"/"Large") were
+// tuned against. Capping by height (scaled through this ratio) rather than
+// by raw width keeps the same card size on a normal 16:9 screen while still
+// scaling sanely on ultrawide/portrait monitors, where a width-only cap
+// crushes card height once it's divided by a much larger or smaller aspect.
+var DENSITY_REFERENCE_ASPECT = 16 / 9
+
 function bestGrid(count, aspect, areaWidth, areaHeight, gap, maxCardWidth) {
   if (count <= 0 || areaWidth <= 0 || areaHeight <= 0 || aspect <= 0) {
     return { columns: 1, rows: 1, cardWidth: 0, cardHeight: 0 }
   }
+
+  var maxCardHeight = maxCardWidth > 0 ? maxCardWidth / DENSITY_REFERENCE_ASPECT : 0
 
   var best = null
   for (var columns = 1; columns <= count; columns++) {
@@ -221,9 +230,9 @@ function bestGrid(count, aspect, areaWidth, areaHeight, gap, maxCardWidth) {
     }
 
     if (cardWidth <= 0 || cardHeight <= 0) continue
-    if (maxCardWidth > 0 && cardWidth > maxCardWidth) {
-      cardWidth = maxCardWidth
-      cardHeight = cardWidth / aspect
+    if (maxCardHeight > 0 && cardHeight > maxCardHeight) {
+      cardHeight = maxCardHeight
+      cardWidth = cardHeight * aspect
     }
 
     if (!best || cardWidth >= best.cardWidth) {
