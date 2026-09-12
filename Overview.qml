@@ -46,12 +46,19 @@ Item {
   // always rebuilt from a fresh snapshot rather than a stale one.
   property string pendingAction: ""
   property string pendingShortcut: ""
+  property var settingsCache: null
+  property string pendingEntryJson: ""
 
   readonly property var entry: {
-    var config = root.shell ? root.shell.shellConfig : null
-    if (!config) return null
+    if (!root.shell) return null
 
-    var layout = config.bar && config.bar.layout ? config.bar.layout : null
+    // Third-party plugins receive a scoped shell API. Current Omarchy exposes
+    // the bar through barConfig; older/full shell APIs expose shellConfig.bar.
+    var config = root.shell.shellConfig || null
+    var bar = config && config.bar ? config.bar : root.shell.barConfig
+    if (!bar) return null
+
+    var layout = bar.layout || null
     var sections = ["left", "center", "right"]
     for (var s = 0; s < sections.length; s++) {
       var list = layout ? layout[sections[s]] : null
@@ -61,7 +68,7 @@ Item {
       }
     }
 
-    var plugins = Array.isArray(config.plugins) ? config.plugins : []
+    var plugins = config && Array.isArray(config.plugins) ? config.plugins : []
     for (var p = 0; p < plugins.length; p++) {
       if (plugins[p] && String(plugins[p].id) === root.pluginId) return plugins[p]
     }
@@ -69,30 +76,93 @@ Item {
     return null
   }
 
-  readonly property string previews: root.setting("previews")
-  readonly property bool showTitles: root.setting("titles") === true
-  readonly property bool showEmpty: root.setting("empty") === true
-  readonly property bool showSpecial: root.setting("special") === true
-  readonly property bool showWallpaper: root.setting("wallpaper") === true
-  readonly property string density: root.setting("density")
-  readonly property string dim: root.setting("dim")
-  readonly property int minSlots: Number(root.setting("slots"))
+  property string previews: "live"
+  property bool showTitles: true
+  property bool showEmpty: true
+  property bool showSpecial: true
+  property bool showWallpaper: true
+  property string density: "comfortable"
+  property string dim: "medium"
+  property int minSlots: 5
+
+  function copyEntry(source) {
+    var copy = { id: root.pluginId }
+    if (!source) return copy
+    for (var key in source) if (key !== "id") copy[key] = source[key]
+    return copy
+  }
+
+  function serializeEntry(source) {
+    var entry = root.copyEntry(source)
+    var keys = Object.keys(entry).sort()
+    var ordered = ({})
+    for (var i = 0; i < keys.length; i++) ordered[keys[i]] = entry[keys[i]]
+    return JSON.stringify(ordered)
+  }
+
+  function syncSettingsCache() {
+    var incoming = root.copyEntry(root.entry)
+    var incomingJson = root.serializeEntry(incoming)
+
+    // Scoped plugin APIs publish barConfig just after updateEntryInline()
+    // returns. Ignore an older snapshot while a newer local choice is waiting
+    // to be acknowledged, otherwise a quick second click rebuilds the entry
+    // from stale values and silently undoes the first one.
+    if (root.pendingEntryJson && incomingJson !== root.pendingEntryJson) return
+
+    root.settingsCache = incoming
+    root.applySettingsCache()
+    root.pendingEntryJson = ""
+  }
+
+  function cachedSetting(key) {
+    var value = root.settingsCache ? root.settingsCache[key] : undefined
+    return value === undefined || value === null ? Model.defaultFor(key) : value
+  }
+
+  function applySettingsCache() {
+    root.previews = String(root.cachedSetting("previews"))
+    root.showTitles = root.cachedSetting("titles") === true
+    root.showWallpaper = root.cachedSetting("wallpaper") === true
+    root.showEmpty = root.cachedSetting("empty") === true
+    root.showSpecial = root.cachedSetting("special") === true
+    root.density = String(root.cachedSetting("density"))
+    root.dim = String(root.cachedSetting("dim"))
+    root.minSlots = Number(root.cachedSetting("slots"))
+  }
 
   function setting(key) {
-    var value = root.entry ? root.entry[key] : undefined
-    return value === undefined || value === null ? Model.defaultFor(key) : value
+    switch (String(key)) {
+    case "previews": return root.previews
+    case "titles": return root.showTitles
+    case "wallpaper": return root.showWallpaper
+    case "empty": return root.showEmpty
+    case "special": return root.showSpecial
+    case "density": return root.density
+    case "dim": return root.dim
+    case "slots": return root.minSlots
+    default: return null
+    }
   }
 
   function updateSetting(key, value) {
     if (!root.shell || typeof root.shell.updateEntryInline !== "function") return
+    if (!Model.isSettingValue(key, value)) return
 
-    var next = { id: root.pluginId }
-    if (root.entry) {
-      for (var existing in root.entry) if (existing !== "id") next[existing] = root.entry[existing]
-    }
+    var next = root.copyEntry(root.settingsCache || root.entry)
     next[key] = value
-    root.shell.updateEntryInline(root.pluginId, next)
+    root.settingsCache = next
+    root.applySettingsCache()
+    root.pendingEntryJson = root.serializeEntry(next)
+
+    if (!root.shell.updateEntryInline(root.pluginId, next)) {
+      root.pendingEntryJson = ""
+      root.syncSettingsCache()
+    }
   }
+
+  onEntryChanged: root.syncSettingsCache()
+  Component.onCompleted: root.syncSettingsCache()
 
   function open(payloadJson) {
     var payload = null

@@ -27,9 +27,29 @@ var DIMS = {
   strong: 0.97
 }
 
+var SETTING_VALUES = {
+  previews: ["live", "icons"],
+  titles: [true, false],
+  wallpaper: [true, false],
+  empty: [true, false],
+  special: [true, false],
+  density: ["compact", "comfortable", "large"],
+  dim: ["subtle", "medium", "strong"],
+  slots: [3, 5, 10]
+}
+
 function defaultFor(key) {
   var value = DEFAULTS[String(key)]
   return value === undefined ? null : value
+}
+
+function isSettingValue(key, value) {
+  var allowed = SETTING_VALUES[String(key)]
+  if (!allowed) return false
+  for (var i = 0; i < allowed.length; i++) {
+    if (allowed[i] === value) return true
+  }
+  return false
 }
 
 function isAddress(value) {

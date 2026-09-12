@@ -20,9 +20,12 @@ Row {
     model: root.options
 
     Rectangle {
+      id: option
+
       required property var modelData
 
-      readonly property bool active: String(modelData.value) === String(root.current)
+      readonly property var optionValue: option.modelData.value
+      readonly property bool active: String(option.optionValue) === String(root.current)
 
       width: Math.max(Style.space(58), optionLabel.implicitWidth + Style.spacing.rowPaddingX * 2)
       height: Style.spacing.controlHeight
@@ -39,9 +42,9 @@ Row {
       Text {
         id: optionLabel
         anchors.centerIn: parent
-        text: modelData.label
-        color: active ? root.accent : root.foreground
-        opacity: active ? 1 : 0.75
+        text: option.modelData.label
+        color: option.active ? root.accent : root.foreground
+        opacity: option.active ? 1 : 0.75
         font.family: root.fontFamily
         font.pixelSize: Style.font.bodySmall
       }
@@ -52,7 +55,7 @@ Row {
       }
 
       TapHandler {
-        onTapped: root.selected(modelData.value)
+        onTapped: root.selected(option.optionValue)
       }
     }
   }

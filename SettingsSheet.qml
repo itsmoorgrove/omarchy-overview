@@ -275,54 +275,76 @@ Item {
         color: Util.alpha(root.surface.surfaceText, 0.12)
       }
 
-      Repeater {
-        model: [
-          { key: "previews", title: "Window previews", options: [
-            { value: "live", label: "Live" }, { value: "icons", label: "Icons" }] },
-          { key: "titles", title: "Window titles", options: [
-            { value: true, label: "Show" }, { value: false, label: "Hide" }] },
-          { key: "wallpaper", title: "Wallpaper backdrop", options: [
-            { value: true, label: "On" }, { value: false, label: "Off" }] },
-          { key: "empty", title: "Empty spaces", options: [
-            { value: true, label: "Show" }, { value: false, label: "Hide" }] },
-          { key: "special", title: "Special spaces", options: [
-            { value: true, label: "Show" }, { value: false, label: "Hide" }] },
-          { key: "density", title: "Card size", options: [
-            { value: "compact", label: "Compact" }, { value: "comfortable", label: "Regular" },
-            { value: "large", label: "Large" }] },
-          { key: "dim", title: "Backdrop dim", options: [
-            { value: "subtle", label: "Subtle" }, { value: "medium", label: "Medium" },
-            { value: "strong", label: "Strong" }] },
-          { key: "slots", title: "Minimum spaces", options: [
-            { value: 3, label: "3" }, { value: 5, label: "5" }, { value: 10, label: "10" }] }
+      SettingRow {
+        surface: root.surface
+        overview: root.overview
+        settingKey: "previews"
+        title: "Window previews"
+        options: [{ value: "live", label: "Live" }, { value: "icons", label: "Icons" }]
+      }
+
+      SettingRow {
+        surface: root.surface
+        overview: root.overview
+        settingKey: "titles"
+        title: "Window titles"
+        options: [{ value: true, label: "Show" }, { value: false, label: "Hide" }]
+      }
+
+      SettingRow {
+        surface: root.surface
+        overview: root.overview
+        settingKey: "wallpaper"
+        title: "Wallpaper backdrop"
+        options: [{ value: true, label: "On" }, { value: false, label: "Off" }]
+      }
+
+      SettingRow {
+        surface: root.surface
+        overview: root.overview
+        settingKey: "empty"
+        title: "Empty spaces"
+        options: [{ value: true, label: "Show" }, { value: false, label: "Hide" }]
+      }
+
+      SettingRow {
+        surface: root.surface
+        overview: root.overview
+        settingKey: "special"
+        title: "Special spaces"
+        options: [{ value: true, label: "Show" }, { value: false, label: "Hide" }]
+      }
+
+      SettingRow {
+        surface: root.surface
+        overview: root.overview
+        settingKey: "density"
+        title: "Card size"
+        options: [
+          { value: "compact", label: "Compact" },
+          { value: "comfortable", label: "Regular" },
+          { value: "large", label: "Large" }
         ]
+      }
 
-        Item {
-          required property var modelData
+      SettingRow {
+        surface: root.surface
+        overview: root.overview
+        settingKey: "dim"
+        title: "Backdrop dim"
+        options: [
+          { value: "subtle", label: "Subtle" },
+          { value: "medium", label: "Medium" },
+          { value: "strong", label: "Strong" }
+        ]
+      }
 
-          width: rows.width
-          height: Style.spacing.controlHeight
-
-          Text {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            text: modelData.title
-            color: root.surface.surfaceText
-            font.family: root.surface.fontFamily
-            font.pixelSize: Style.font.body
-          }
-
-          Segmented {
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            options: modelData.options
-            current: root.overview.setting(modelData.key)
-            fontFamily: root.surface.fontFamily
-            foreground: root.surface.surfaceText
-            accent: root.surface.surfaceAccent
-            onSelected: function(value) { root.overview.updateSetting(modelData.key, value) }
-          }
-        }
+      SettingRow {
+        surface: root.surface
+        overview: root.overview
+        settingKey: "slots"
+        title: "Minimum spaces"
+        options: [{ value: 3, label: "3" }, { value: 5, label: "5" }, { value: 10, label: "10" }]
       }
     }
   }
