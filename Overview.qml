@@ -47,7 +47,7 @@ Item {
   property string pendingAction: ""
   property string pendingShortcut: ""
   property var settingsCache: null
-  property string pendingEntryJson: ""
+  property var pendingSettings: ({})
 
   readonly property var entry: {
     if (!root.shell) return null
@@ -92,27 +92,35 @@ Item {
     return copy
   }
 
-  function serializeEntry(source) {
-    var entry = root.copyEntry(source)
-    var keys = Object.keys(entry).sort()
-    var ordered = ({})
-    for (var i = 0; i < keys.length; i++) ordered[keys[i]] = entry[keys[i]]
-    return JSON.stringify(ordered)
-  }
-
   function syncSettingsCache() {
     var incoming = root.copyEntry(root.entry)
-    var incomingJson = root.serializeEntry(incoming)
-
-    // Scoped plugin APIs publish barConfig just after updateEntryInline()
-    // returns. Ignore an older snapshot while a newer local choice is waiting
-    // to be acknowledged, otherwise a quick second click rebuilds the entry
-    // from stale values and silently undoes the first one.
-    if (root.pendingEntryJson && incomingJson !== root.pendingEntryJson) return
-
+    var waiting = ({})
+    var hasPending = false
+    // Acknowledge individual choices so unrelated external changes remain visible.
+    for (var key in root.pendingSettings) {
+      if (incoming[key] !== root.pendingSettings[key]) {
+        waiting[key] = root.pendingSettings[key]
+        incoming[key] = waiting[key]
+        hasPending = true
+      }
+    }
+    root.pendingSettings = waiting
     root.settingsCache = incoming
     root.applySettingsCache()
-    root.pendingEntryJson = ""
+    if (!hasPending) settingsSyncTimeout.stop()
+  }
+
+  function expirePendingSettings() {
+    // The published config is authoritative if a write is never acknowledged.
+    root.pendingSettings = ({})
+    root.syncSettingsCache()
+  }
+
+  Timer {
+    id: settingsSyncTimeout
+    interval: 2000
+    repeat: false
+    onTriggered: root.expirePendingSettings()
   }
 
   function cachedSetting(key) {
@@ -147,17 +155,32 @@ Item {
 
   function updateSetting(key, value) {
     if (!root.shell || typeof root.shell.updateEntryInline !== "function") return
-    if (!Model.isSettingValue(key, value)) return
+    if (key === "shortcut") {
+      if (typeof value !== "string" || (value !== "" && !Keybind.isValid(value))) return
+    } else if (!Model.isSettingValue(key, value)) {
+      return
+    }
 
-    var next = root.copyEntry(root.settingsCache || root.entry)
+    root.syncSettingsCache()
+    var next = root.copyEntry(root.settingsCache)
     next[key] = value
+    var waiting = root.copyEntry(root.pendingSettings)
+    delete waiting.id
+    waiting[key] = value
+    root.pendingSettings = waiting
     root.settingsCache = next
     root.applySettingsCache()
-    root.pendingEntryJson = root.serializeEntry(next)
+    settingsSyncTimeout.restart()
 
-    if (!root.shell.updateEntryInline(root.pluginId, next)) {
-      root.pendingEntryJson = ""
-      root.syncSettingsCache()
+    try {
+      if (!root.shell.updateEntryInline(root.pluginId, next)) {
+        settingsSyncTimeout.stop()
+        root.expirePendingSettings()
+      }
+    } catch (error) {
+      settingsSyncTimeout.stop()
+      root.expirePendingSettings()
+      console.warn("Overview settings could not be saved:", String(error))
     }
   }
 
