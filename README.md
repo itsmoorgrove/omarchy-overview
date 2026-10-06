@@ -3,7 +3,7 @@
 A workspace overview for [Omarchy](https://omarchy.org). Every space on one screen,
 with live window previews, drag-and-drop, and a bar icon that opens it in one click.
 
-![Overview](docs/preview.png)
+![Overview](preview.png)
 
 ![Demo](docs/demo.gif)
 
