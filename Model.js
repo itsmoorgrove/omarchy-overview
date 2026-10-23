@@ -179,10 +179,71 @@ function workspaceLabel(workspace, id) {
   return String(id)
 }
 
+// Numeric workspace ids that Hyprland workspace rules bind to a monitor, per
+// monitor name, ascending: { "HDMI-A-1": [1, 2, ...], "DP-2": [11, 12, ...] }.
+// Read from `hyprctl -j workspacerules`. Named workspaces and selectors such as
+// "r[1-5]" are skipped, as are monitors given by description.
+function boundWorkspaceIds(rules) {
+  var map = {}
+  if (!Array.isArray(rules)) return map
+  for (var i = 0; i < rules.length; i++) {
+    var rule = rules[i]
+    if (!rule || rule.enabled === false) continue
+    var text = String(rule.workspaceString === undefined ? "" : rule.workspaceString)
+    var monitor = String(rule.monitor === undefined ? "" : rule.monitor)
+    if (!/^[0-9]{1,4}$/.test(text) || !monitor || monitor.indexOf("desc:") === 0) continue
+    var id = Number(text)
+    if (id <= 0) continue
+    if (!map[monitor]) map[monitor] = []
+    if (map[monitor].indexOf(id) === -1) map[monitor].push(id)
+  }
+  for (var name in map) map[name].sort(function(left, right) { return left - right })
+  return map
+}
+
+// Ids that rules bind to any monitor other than `screenName`, as a set.
+function boundElsewhere(bound, screenName) {
+  var set = {}
+  for (var name in bound) {
+    if (name === screenName) continue
+    for (var i = 0; i < bound[name].length; i++) set[bound[name][i]] = true
+  }
+  return set
+}
+
+// Empty slots for a monitor that has workspaces bound to it by rules: its own
+// unused ids, through at least the `minimum`-th bound id and one past the
+// highest one in use. Every such monitor offers them, focused or not, so a
+// window can be dropped onto a fresh workspace on either screen.
+function boundEmptySlots(bound, usedAnywhere, mine, minimum) {
+  if (!bound || bound.length === 0) return []
+  var highest = 0
+  for (var m = 0; m < mine.length; m++) {
+    if (bound.indexOf(mine[m].id) !== -1) highest = Math.max(highest, mine[m].id)
+  }
+
+  var ceiling = bound[Math.min(bound.length, minimum) - 1]
+  for (var b = 0; b < bound.length; b++) {
+    if (bound[b] > highest) {
+      ceiling = Math.max(ceiling, bound[b])
+      break
+    }
+  }
+
+  var slots = []
+  for (var i = 0; i < bound.length && bound[i] <= ceiling; i++) {
+    if (!usedAnywhere[bound[i]]) slots.push({ id: bound[i], label: String(bound[i]), workspace: null, special: false })
+  }
+  return slots
+}
+
 function slotsFor(workspaces, screenName, isPrimary, options) {
   var settings = options || {}
   var minimum = Math.max(1, Math.min(10, Number(settings.minSlots) || 5))
   var values = (workspaces && workspaces.values) || []
+  var bound = settings.boundIds || {}
+  var mineBound = screenName && bound[screenName] ? bound[screenName] : []
+  var reserved = boundElsewhere(bound, screenName)
 
   var mine = []
   var specials = []
@@ -207,13 +268,16 @@ function slotsFor(workspaces, screenName, isPrimary, options) {
     }
   }
 
-  if (settings.showEmpty && isPrimary) {
+  if (settings.showEmpty && mineBound.length > 0) {
+    mine = mine.concat(boundEmptySlots(mineBound, usedAnywhere, mine, minimum))
+  } else if (settings.showEmpty && isPrimary) {
     var highest = 0
     for (var m = 0; m < mine.length; m++) highest = Math.max(highest, mine[m].id)
 
     var ceiling = Math.min(10, Math.max(minimum, highest + 1))
     for (var slot = 1; slot <= ceiling; slot++) {
-      if (usedAnywhere[slot]) continue
+      // A number a rule pins to another monitor would open over there.
+      if (usedAnywhere[slot] || reserved[slot]) continue
       mine.push({ id: slot, label: String(slot), workspace: null, special: false })
     }
   }
@@ -300,4 +364,37 @@ function moveWindowToSpecialCommand(address, name) {
   if (!isAddress(address) || !isSpecialName(name)) return ""
   return 'hl.dsp.window.move({ window = "address:' + address + '", workspace = "special:' + name
     + '", follow = false })'
+}
+
+// Index of the monitor frame (compositor layout coordinates) holding a point,
+// or -1. A drag is tracked in these coordinates so it can leave the screen it
+// started on and land on a workspace of another one.
+function frameIndexAt(frames, x, y) {
+  if (!frames || !isFinite(x) || !isFinite(y)) return -1
+  for (var i = 0; i < frames.length; i++) {
+    var frame = frames[i]
+    if (!frame) continue
+    if (x >= frame.x && y >= frame.y && x < frame.x + frame.width && y < frame.y + frame.height) return i
+  }
+  return -1
+}
+
+function sameSlot(left, right) {
+  if (!left || !right) return false
+  if (left.special !== right.special) return false
+  return left.special ? left.label === right.label : Number(left.id) === Number(right.id)
+}
+
+// Commands that send each dragged window to the drop slot. Dropping back onto
+// the workspace the drag came from is a no-op.
+function moveCommands(addresses, from, target) {
+  if (!target || sameSlot(from, target) || !addresses) return []
+  var commands = []
+  for (var i = 0; i < addresses.length; i++) {
+    var command = target.special
+      ? moveWindowToSpecialCommand(addresses[i], target.label)
+      : moveWindowCommand(addresses[i], target.id)
+    if (command) commands.push(command)
+  }
+  return commands
 }

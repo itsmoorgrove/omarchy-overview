@@ -185,7 +185,10 @@ Item {
   }
 
   onEntryChanged: root.syncSettingsCache()
-  Component.onCompleted: root.syncSettingsCache()
+  Component.onCompleted: {
+    root.syncSettingsCache()
+    rulesProcess.running = true
+  }
 
   function open(payloadJson) {
     var payload = null
@@ -198,6 +201,7 @@ Item {
     Hyprland.refreshMonitors()
     Hyprland.refreshWorkspaces()
     Hyprland.refreshToplevels()
+    if (!rulesProcess.running) rulesProcess.running = true
 
     root.filtering = false
     root.filterText = ""
@@ -206,6 +210,7 @@ Item {
   }
 
   function close() {
+    root.cancelDrag()
     root.opened = false
     root.settingsOpen = false
     root.filtering = false
@@ -251,14 +256,89 @@ Item {
     root.refreshLater()
   }
 
-  function moveWindow(address, slot) {
-    if (!slot) return
-    var command = slot.special
-      ? Model.moveWindowToSpecialCommand(address, slot.label)
-      : Model.moveWindowCommand(address, slot.id)
-    if (!command) return
-    root.dispatch(command)
-    root.refreshLater()
+  // Drag state lives here rather than on a surface: every monitor has its own
+  // layer surface, and a drag picked up on one screen has to be able to land
+  // on a workspace card of another. Hyprland keeps delivering pointer motion
+  // to the surface that took the press, so positions arrive local to the
+  // source surface and are lifted into compositor layout coordinates.
+  property var surfaces: []
+  property bool dragActive: false
+  property var dragAddresses: []
+  property string dragLabel: ""
+  property var dragFrom: null
+  property var dropSurface: null
+  property int dropIndex: -1
+  property real dropX: 0
+  property real dropY: 0
+
+  function registerSurface(surface) {
+    if (root.surfaces.indexOf(surface) !== -1) return
+    var next = root.surfaces.slice()
+    next.push(surface)
+    root.surfaces = next
+  }
+
+  function unregisterSurface(surface) {
+    root.surfaces = root.surfaces.filter(function(item) { return item !== surface })
+    if (root.dropSurface === surface) root.cancelDrag()
+  }
+
+  function isDragged(address) {
+    return root.dragActive && root.dragAddresses.indexOf(address) !== -1
+  }
+
+  function beginDrag(surface, addresses, label, from, point) {
+    var valid = (addresses || []).filter(function(address) { return Model.isAddress(address) })
+    if (!surface || valid.length === 0) return
+    // Freeze which surface holds the keyboard before the drag flag flips, so
+    // the focus never bounces while the pointer crosses screens.
+    for (var i = 0; i < root.surfaces.length; i++)
+      root.surfaces[i].primaryAtDragStart = root.surfaces[i].focusedMonitor
+    root.dragAddresses = valid
+    root.dragLabel = label
+    root.dragFrom = from
+    root.dragActive = true
+    root.updateDrag(surface, point)
+  }
+
+  function updateDrag(surface, point) {
+    if (!root.dragActive || !surface || !surface.frame) return
+    var x = surface.frame.x + point.x
+    var y = surface.frame.y + point.y
+    var frames = root.surfaces.map(function(item) { return item.frame })
+    var index = Model.frameIndexAt(frames, x, y)
+    var target = index >= 0 ? root.surfaces[index] : null
+
+    root.dropSurface = target
+    if (!target) {
+      root.dropIndex = -1
+      return
+    }
+    root.dropX = x - target.frame.x
+    root.dropY = y - target.frame.y
+    root.dropIndex = target.cardIndexAt(Qt.point(root.dropX, root.dropY))
+  }
+
+  function cancelDrag() {
+    root.dragActive = false
+    root.dragAddresses = []
+    root.dragLabel = ""
+    root.dragFrom = null
+    root.dropSurface = null
+    root.dropIndex = -1
+  }
+
+  function endDrag() {
+    if (!root.dragActive) return
+    var surface = root.dropSurface
+    var target = surface && root.dropIndex >= 0 && root.dropIndex < surface.slots.length
+      ? surface.slots[root.dropIndex]
+      : null
+    var commands = Model.moveCommands(root.dragAddresses, root.dragFrom, target)
+
+    root.cancelDrag()
+    for (var i = 0; i < commands.length; i++) root.dispatch(commands[i])
+    if (commands.length > 0) root.refreshLater()
   }
 
   function refreshLater() {
@@ -403,6 +483,27 @@ Item {
 
         writeProcess.pendingResult = ""
         bindsProcess.running = true
+      }
+    }
+  }
+
+  // Workspace numbers that Hyprland rules pin to each monitor, so every
+  // screen offers its own empty workspaces (Model.boundWorkspaceIds). Read on
+  // each open; rules only change with the Hyprland config.
+  property var boundIds: ({})
+
+  Process {
+    id: rulesProcess
+    command: ["hyprctl", "-j", "workspacerules"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var rules = null
+        try {
+          rules = text.length <= 1048576 ? JSON.parse(text) : null
+        } catch (error) {
+          rules = null
+        }
+        root.boundIds = Model.boundWorkspaceIds(rules)
       }
     }
   }
