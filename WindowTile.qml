@@ -22,8 +22,7 @@ Item {
     && !root.surface.dragging
   readonly property bool matched: !root.ready || Model.matches(root.entry, root.overview.filterText)
   readonly property bool dimmed: root.ready && root.overview.filterText !== "" && !root.matched
-  readonly property bool held: root.ready && root.surface.dragging
-    && root.surface.dragAddress === root.entry.address
+  readonly property bool held: root.ready && root.overview.isDragged(root.entry.address)
   readonly property bool selected: root.ready && root.surface.slotIndex === root.card.slotIndex
     && root.surface.windowIndex === root.stackIndex
   readonly property string label: root.ready
@@ -139,7 +138,7 @@ Item {
       if (!dragStarted) {
         if (Math.abs(mouse.x - origin.x) < 8 && Math.abs(mouse.y - origin.y) < 8) return
         dragStarted = true
-        root.surface.beginDrag(root.entry.address, root.label, point)
+        root.surface.beginDrag([root.entry.address], root.label, root.card.slot, point)
         return
       }
 

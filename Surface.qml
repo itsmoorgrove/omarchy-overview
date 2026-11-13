@@ -15,8 +15,13 @@ PanelWindow {
   readonly property var hyprMonitor: Hyprland.monitorFor(root.screen)
   readonly property var frame: Model.monitorFrame(root.hyprMonitor)
   readonly property string monitorName: root.hyprMonitor ? String(root.hyprMonitor.name) : ""
-  readonly property bool primary: Hyprland.focusedMonitor !== null && root.hyprMonitor !== null
+  readonly property bool focusedMonitor: Hyprland.focusedMonitor !== null && root.hyprMonitor !== null
     && Hyprland.focusedMonitor.id === root.hyprMonitor.id
+  // Carrying a window over to another screen moves Hyprland's focused
+  // monitor with the pointer. Hold on to the keyboard surface and the slot
+  // list for the length of a drag so neither shifts under it.
+  property bool primaryAtDragStart: false
+  readonly property bool primary: root.overview.dragActive ? root.primaryAtDragStart : root.focusedMonitor
 
   readonly property real aspect: root.frame && root.frame.height > 0
     ? root.frame.width / root.frame.height
@@ -24,6 +29,7 @@ PanelWindow {
   readonly property var slots: Model.slotsFor(Hyprland.workspaces, root.monitorName, root.primary, {
     minSlots: root.overview.minSlots,
     showEmpty: root.overview.showEmpty,
+    boundIds: root.overview.boundIds,
     showSpecial: root.overview.showSpecial
   })
 
@@ -31,12 +37,11 @@ PanelWindow {
   property int windowIndex: -1
   property var cards: []
 
-  property bool dragging: false
-  property string dragAddress: ""
-  property string dragLabel: ""
-  property real dragX: 0
-  property real dragY: 0
-  property int dropIndex: -1
+  // The drag itself is owned by the overview so it can cross screens; these
+  // are this surface's view of it.
+  readonly property bool dragging: root.overview.dragActive
+  readonly property bool dropHere: root.overview.dragActive && root.overview.dropSurface === root
+  readonly property int dropIndex: root.dropHere ? root.overview.dropIndex : -1
 
   readonly property var insets: Model.reservedInsets(root.hyprMonitor)
   readonly property real chromeMargin: Style.spacing.lg
@@ -142,41 +147,25 @@ PanelWindow {
     return -1
   }
 
-  function beginDrag(address, label, point) {
-    if (!Model.isAddress(address)) return
-    root.dragging = true
-    root.dragAddress = address
-    root.dragLabel = label
-    root.dragX = point.x
-    root.dragY = point.y
-    root.dropIndex = root.cardIndexAt(point)
+  // A window tile drags one address; a workspace card drags all of its windows.
+  function beginDrag(addresses, label, from, point) {
+    root.overview.beginDrag(root, addresses, label, from, point)
   }
 
   function updateDrag(point) {
-    if (!root.dragging) return
-    root.dragX = point.x
-    root.dragY = point.y
-    root.dropIndex = root.cardIndexAt(point)
+    root.overview.updateDrag(root, point)
   }
 
   function cancelDrag() {
-    root.dragging = false
-    root.dragAddress = ""
-    root.dragLabel = ""
-    root.dropIndex = -1
+    root.overview.cancelDrag()
   }
 
   function endDrag() {
-    if (!root.dragging) return
-
-    var target = root.dropIndex >= 0 && root.dropIndex < root.slots.length
-      ? root.slots[root.dropIndex]
-      : null
-    var address = root.dragAddress
-
-    root.cancelDrag()
-    if (target) root.overview.moveWindow(address, target)
+    root.overview.endDrag()
   }
+
+  Component.onCompleted: root.overview.registerSurface(root)
+  Component.onDestruction: root.overview.unregisterSurface(root)
 
   visible: root.overview.opened
   color: "transparent"
@@ -437,9 +426,9 @@ PanelWindow {
 
   Rectangle {
     id: ghost
-    visible: root.dragging
-    x: root.dragX - ghost.width / 2
-    y: root.dragY - ghost.height / 2
+    visible: root.dropHere
+    x: root.overview.dropX - ghost.width / 2
+    y: root.overview.dropY - ghost.height / 2
     z: 100
     width: Math.min(Style.space(240), ghostLabel.implicitWidth + Style.spacing.rowPaddingX * 2)
     height: Style.spacing.controlHeight
@@ -453,7 +442,7 @@ PanelWindow {
       id: ghostLabel
       anchors.centerIn: parent
       width: ghost.width - Style.spacing.rowPaddingX * 2
-      text: root.dragLabel
+      text: root.overview.dragLabel
       color: root.surfaceText
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall

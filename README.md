@@ -11,11 +11,13 @@ with live window previews, drag-and-drop, and a bar icon that opens it in one cl
 
 - **Live previews** — real, moving window content, including workspaces you are not on
 - **True layout** — windows sit exactly where Hyprland has them, tiled and floating
-- **Drag to move** — pull a window onto another space to send it there
+- **Drag to move** — pull a window onto another space to send it there, on the same screen or another one;
+  drag a space itself to move all of its windows
 - **One click** — the bar icon toggles the overview; right-click opens settings
 - **Your keybinding, your call** — ships unbound; pick a combination in settings and nothing touches your Hyprland config until you apply it
 - **Keyboard first** — arrows to navigate, `/` to filter, enter to jump, esc to leave
-- **Every monitor** — each screen shows its own spaces, at its own aspect ratio
+- **Every monitor** — each screen shows its own spaces, at its own aspect ratio; with workspace rules that bind
+  numbers to monitors (say 1–10 left, 11–20 right), each screen offers its own empty spaces
 
 ## Install
 
@@ -39,7 +41,8 @@ icon with `omarchy bar move moorgrove.overview --section right`.
 | Click a space | Switch to it |
 | Click a window | Focus it |
 | Middle-click a window | Close it |
-| Drag a window onto a space | Move it there, silently |
+| Drag a window onto a space | Move it there, silently (also onto another monitor) |
+| Drag a space onto another space | Move all of its windows there |
 | `←` `→` `↑` `↓` / `h` `j` `k` `l` | Move around the grid of spaces |
 | `tab` / `shift+tab` | Step through all spaces, in order |
 | `1`–`0` | Jump to a space |

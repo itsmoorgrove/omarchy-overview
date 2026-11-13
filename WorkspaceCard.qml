@@ -22,6 +22,7 @@ Item {
     && root.slot.workspace.focused === true
   readonly property bool selected: root.surface.slotIndex === root.slotIndex
   readonly property bool dropTarget: root.surface.dragging && root.surface.dropIndex === root.slotIndex
+    && !Model.sameSlot(root.overview.dragFrom, root.slot)
   readonly property color accent: root.surface.surfaceAccent
   readonly property color text: root.surface.surfaceText
 
@@ -124,18 +125,59 @@ Item {
       }
     }
 
+    // Click switches to the workspace. Dragging the card itself (anywhere a
+    // window tile isn't) carries all of its windows to the card it is dropped
+    // on, on this screen or another one.
     MouseArea {
+      id: cardArea
       anchors.fill: parent
       z: -1
       acceptedButtons: Qt.LeftButton
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
+
+      property point origin: Qt.point(0, 0)
+      property bool dragStarted: false
+
       onEntered: {
         if (!root.ready) return
         root.surface.slotIndex = root.slotIndex
         root.surface.windowIndex = -1
       }
-      onClicked: if (root.ready) root.overview.activateWorkspace(root.slot)
+
+      onPressed: function(mouse) {
+        origin = Qt.point(mouse.x, mouse.y)
+        dragStarted = false
+      }
+
+      onPositionChanged: function(mouse) {
+        if (!root.ready || !pressed || !(mouse.buttons & Qt.LeftButton)) return
+        var point = mapToItem(null, mouse.x, mouse.y)
+
+        if (!dragStarted) {
+          if (root.empty) return
+          if (Math.abs(mouse.x - origin.x) < 8 && Math.abs(mouse.y - origin.y) < 8) return
+          dragStarted = true
+          var addresses = root.windows.map(function(entry) { return entry.address })
+          var count = addresses.length
+          root.surface.beginDrag(addresses,
+            "Workspace " + root.slot.label + " · " + count + (count === 1 ? " window" : " windows"),
+            root.slot, point)
+          return
+        }
+
+        root.surface.updateDrag(point)
+      }
+
+      onReleased: if (dragStarted) root.surface.endDrag()
+
+      onCanceled: {
+        if (!dragStarted) return
+        dragStarted = false
+        root.surface.cancelDrag()
+      }
+
+      onClicked: if (!dragStarted && root.ready) root.overview.activateWorkspace(root.slot)
     }
   }
 }
